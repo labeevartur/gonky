@@ -1766,9 +1766,6 @@
 
       startRace() {
         SFX.unlock();
-        if (Object.keys(this.players).length === 0) {
-          document.getElementById('btn-add-bots').click();
-        }
 
         this.phase = 'racing';
         this.timeLeft = this.duration;
@@ -1846,7 +1843,12 @@
 
       dispatchTeamSpecials() {
         if (this.phase !== 'racing') return;
-        const sorted = [...this.tables].sort((a, b) => b.progress - a.progress);
+        const activeTables = this.tables.filter((t) =>
+          Object.values(this.players).some((p) => p.tableId === t.id)
+        );
+        if (activeTables.length === 0) return;
+
+        const sorted = [...activeTables].sort((a, b) => b.progress - a.progress);
         // Rubber-banding: trailing/middle tables get Nitro & Sabotage more often
         const trailing = sorted.slice(Math.floor(sorted.length / 2));
         const nitroTable = trailing[Math.floor(Math.random() * trailing.length)] || sorted[0];
@@ -1866,7 +1868,6 @@
           if (chosen) {
             this.bus.send('give_sabotage', { targetPlayerId: chosen.id, card });
           } else {
-            // Bot uses sabotage on leader
             const leader = sorted[0];
             if (leader && leader.id !== sabTable.id) {
               this.applySabotage(sabTable, leader, card.id);
@@ -2013,7 +2014,8 @@
         const sortedByProg = [...this.tables].sort((a, b) => b.progress - a.progress);
         const leader = sortedByProg[0];
         if (leader) {
-          document.getElementById('hud-leader').textContent = `${leader.name} (${Math.min(100, Math.round(leader.progress))}%)`;
+          document.getElementById('hud-leader').textContent =
+            leader.progress > 0 ? `${leader.name} (${Math.min(100, Math.round(leader.progress))}%)` : '—';
 
           // Automatic track events at 30%, 60%, 85%
           if (this.phase === 'racing') {
@@ -2035,13 +2037,20 @@
         // Update each table's velocity & progress
         this.tables.forEach((t, idx) => {
           const members = allPlayers.filter((p) => p.tableId === t.id);
-          const count = Math.max(1, members.length);
 
+          // Empty tables without players stay parked on the grid
+          if (members.length === 0) {
+            t.recentTaps = 0;
+            t.speed = 0;
+            return;
+          }
+
+          const count = members.length;
           // Average taps per player + up to +10% mass bonus
           const avgTapImpulse = t.recentTaps / count;
           t.recentTaps = 0;
 
-          const massBonus = 1 + Math.min(0.10, (members.length - 1) * 0.015);
+          const massBonus = 1 + Math.min(0.10, (count - 1) * 0.015);
           let mult = massBonus;
 
           if (t.nitroUntil > now) mult *= 2.15;
@@ -2051,13 +2060,19 @@
           if (this.activeGlobalEvent?.type === 'wifi') mult *= 0.55;
           if (this.activeGlobalEvent?.type === 'friday') mult *= 1.35;
 
-          // Target speed in % per second (balanced for ~60s race)
-          const targetSpeed = Math.min(9.5, (0.35 + avgTapImpulse * 0.95) * mult);
-          t.speed += (targetSpeed - t.speed) * Math.min(1, effDt * 6);
+          // Move ONLY when players are actively tapping (or during active Nitro burst)
+          const hasNitroBoost = t.nitroUntil > now;
+          const baseImpulse = avgTapImpulse > 0 ? avgTapImpulse * 1.15 : (hasNitroBoost ? 1.8 : 0);
+          const targetSpeed = Math.min(10.5, baseImpulse * mult);
+
+          const damping = targetSpeed > t.speed ? 8 : 11;
+          t.speed += (targetSpeed - t.speed) * Math.min(1, effDt * damping);
+          if (t.speed < 0.02 && targetSpeed === 0) t.speed = 0;
+
           t.progress += t.speed * effDt;
 
-          // Spawn exhaust particles
-          if (t.speed > 1.2 && Math.random() < 0.45) {
+          // Spawn exhaust particles only while moving
+          if (t.speed > 0.6 && Math.random() < 0.45) {
             this.particles.push({
               lane: idx,
               xPct: t.progress - 1.5,
@@ -2196,10 +2211,10 @@
 
           // Left Leaderboard Badge
           const rank = sorted.findIndex((x) => x.id === t.id) + 1;
-          ctx.fillStyle = rank === 1 ? 'rgba(255, 190, 11, 0.22)' : 'rgba(0, 0, 0, 0.45)';
+          ctx.fillStyle = rank === 1 && t.progress > 0 ? 'rgba(255, 190, 11, 0.22)' : 'rgba(0, 0, 0, 0.45)';
           ctx.fillRect(8, y0 + 5, 152, laneH - 10);
 
-          ctx.fillStyle = rank === 1 ? '#ffbe0b' : '#f8fafc';
+          ctx.fillStyle = rank === 1 && t.progress > 0 ? '#ffbe0b' : '#f8fafc';
           ctx.font = 'bold 14px sans-serif';
           ctx.fillText(`#${rank} ${t.name.slice(0, 13)}`, 14, yc - 2);
 
@@ -2242,8 +2257,8 @@
           // Spin effect (Banana peel)
           if (t.spinUntil > now) {
             ctx.rotate((now / 90) % (Math.PI * 2));
-          } else {
-            // Subtle bounce & tilt by speed
+          } else if (t.speed > 0.1) {
+            // Subtle bounce & tilt only while moving
             const bounce = Math.sin(now / 70 + idx) * Math.min(4, t.speed * 0.7);
             ctx.translate(0, bounce);
             const stretchX = 1 + Math.min(0.18, t.speed * 0.02);
@@ -2353,7 +2368,7 @@
         // Award tournament points
         const pts = [3, 2, 1];
         ranked.slice(0, 3).forEach((t, idx) => {
-          t.tournamentPoints += pts[idx];
+          if (t.progress > 0) t.tournamentPoints += pts[idx];
         });
 
         const placesEl = document.getElementById('podium-places');
