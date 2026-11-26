@@ -1,0 +1,2878 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ГОНКИ СТОЛОВ: Корпоративный Заезд</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --panel: rgba(18, 25, 43, 0.92);
+      --border: rgba(255, 255, 255, 0.14);
+      --accent: #ffbe0b;
+      --accent-2: #fb5607;
+      --neon-blue: #3a86ff;
+      --neon-pink: #ff006e;
+      --neon-green: #06d6a0;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+
+    button, input, select {
+      font-family: inherit;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ================= HOST / PROJECTOR LAYOUT ================= */
+    #host-app {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #090d16 75%);
+    }
+
+    .host-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      background: rgba(10, 15, 28, 0.95);
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      z-index: 20;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffbe0b, #fb5607, #ff006e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+    }
+
+    .pill.online { border-color: rgba(6, 214, 160, 0.5); color: #34d399; }
+    .pill.warn { border-color: rgba(251, 191, 36, 0.5); color: #fbbf24; }
+
+    .host-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      transition: transform 0.12s, background 0.15s, box-shadow 0.15s;
+    }
+
+    .btn:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-1px); }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary {
+      background: linear-gradient(135deg, #ffbe0b, #fb5607);
+      color: #111827;
+      border: none;
+      box-shadow: 0 4px 18px rgba(251, 86, 7, 0.45);
+    }
+    .btn-green {
+      background: linear-gradient(135deg, #06d6a0, #059669);
+      color: #052e16;
+      border: none;
+      box-shadow: 0 4px 18px rgba(6, 214, 160, 0.4);
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      border: none;
+    }
+
+    /* Lobby Screen */
+    #lobby-screen {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 16px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .lobby-sidebar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .qr-card {
+      background: #ffffff;
+      padding: 12px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #qr-container {
+      width: 196px;
+      height: 196px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .room-code-badge {
+      margin-top: 8px;
+      color: #0f172a;
+      font-weight: 900;
+      font-size: 1.15rem;
+      letter-spacing: 2px;
+    }
+
+    .field-group {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field-group label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .input-dark {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font-size: 0.85rem;
+    }
+
+    .lobby-main {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .lobby-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 14px;
+    }
+
+    .tables-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+      gap: 12px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .table-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .table-card.has-players {
+      border-color: rgba(6, 214, 160, 0.55);
+      box-shadow: 0 0 20px rgba(6, 214, 160, 0.12);
+    }
+
+    .table-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .table-name-input {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.98rem;
+      padding: 4px 8px;
+      width: 100%;
+    }
+    .table-name-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    .avatar-selector {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .av-chip {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 4px 7px;
+      font-size: 1.05rem;
+      cursor: pointer;
+    }
+    .av-chip.active {
+      background: rgba(255, 190, 11, 0.25);
+      border-color: var(--accent);
+      transform: scale(1.08);
+    }
+
+    .player-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-height: 34px;
+      align-content: flex-start;
+    }
+
+    .player-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(58, 134, 255, 0.2);
+      border: 1px solid rgba(58, 134, 255, 0.4);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .player-tag.bot {
+      background: rgba(148, 163, 184, 0.15);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: #cbd5e1;
+    }
+
+    .kick-btn {
+      cursor: pointer;
+      color: #f87171;
+      font-weight: 900;
+      margin-left: 2px;
+    }
+
+    /* ================= RACE ARENA ================= */
+    #race-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .race-hud {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .hud-box {
+      pointer-events: auto;
+      background: rgba(10, 15, 28, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .timer-big {
+      font-size: 1.7rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+
+    .event-hotkeys {
+      display: flex;
+      gap: 6px;
+    }
+
+    .hk-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--border);
+      color: #fff;
+      border-radius: 9px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .hk-btn:hover { background: rgba(255, 255, 255, 0.22); }
+
+    #race-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Global Event Banner Overlay */
+    #global-banner {
+      position: absolute;
+      top: 76px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 18;
+      padding: 12px 28px;
+      border-radius: 18px;
+      font-size: 1.55rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
+      animation: popBanner 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      pointer-events: none;
+    }
+
+    @keyframes popBanner {
+      0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+
+    .banner-boss {
+      background: linear-gradient(135deg, #dc2626, #7f1d1d);
+      border: 3px solid #fca5a5;
+      color: #fff;
+      animation: popBanner 0.3s ease, shakeAnim 0.25s infinite;
+    }
+    .banner-bonus {
+      background: linear-gradient(135deg, #10b981, #047857);
+      border: 3px solid #6ee7b7;
+      color: #fff;
+    }
+    .banner-wifi {
+      background: linear-gradient(135deg, #6366f1, #312e81);
+      border: 3px solid #a5b4fc;
+      color: #fff;
+    }
+    .banner-friday {
+      background: linear-gradient(135deg, #f59e0b, #db2777);
+      border: 3px solid #fde68a;
+      color: #fff;
+    }
+
+    @keyframes shakeAnim {
+      0%, 100% { transform: translateX(-50%) rotate(0deg); }
+      25% { transform: translateX(-51%) rotate(-1.5deg); }
+      75% { transform: translateX(-49%) rotate(1.5deg); }
+    }
+
+    .commentator-bar {
+      height: 40px;
+      background: rgba(9, 13, 22, 0.96);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      z-index: 15;
+    }
+
+    .live-badge {
+      background: #ef4444;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+    }
+
+    /* ================= PODIUM MODAL ================= */
+    #podium-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 11, 20, 0.9);
+      backdrop-filter: blur(10px);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .podium-card {
+      background: linear-gradient(160deg, #1e293b, #0f172a);
+      border: 2px solid rgba(255, 190, 11, 0.5);
+      border-radius: 24px;
+      padding: 26px;
+      max-width: 820px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8);
+    }
+
+    .podium-places {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 20px 0;
+      align-items: end;
+    }
+
+    .place-box {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px 12px;
+    }
+    .place-1 {
+      background: linear-gradient(180deg, rgba(255, 190, 11, 0.25), rgba(251, 86, 7, 0.12));
+      border: 2px solid #ffbe0b;
+      transform: translateY(-10px);
+    }
+
+    .mvp-box {
+      background: linear-gradient(90deg, rgba(255, 0, 110, 0.2), rgba(58, 134, 255, 0.2));
+      border: 1px solid rgba(255, 0, 110, 0.5);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+
+    /* ================= TEST SIMULATOR DRAWER ================= */
+    #sim-drawer {
+      position: fixed;
+      right: 16px;
+      bottom: 50px;
+      width: 340px;
+      height: 580px;
+      max-height: 82vh;
+      background: #0f172a;
+      border: 2px solid var(--neon-blue);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
+      z-index: 45;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sim-header {
+      background: #1e293b;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 800;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ================= MOBILE CONTROLLER UI ================= */
+    #player-app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at 50% 15%, #1e293b 0%, #090d16 85%);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    #player-app.boss-alert {
+      background: radial-gradient(circle at 50% 30%, #dc2626 0%, #450a0a 90%);
+      animation: pulseRed 0.35s infinite alternate;
+    }
+
+    @keyframes pulseRed {
+      from { filter: brightness(1); }
+      to { filter: brightness(1.25); }
+    }
+
+    .p-setup {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+      max-width: 440px;
+      margin: 0 auto;
+      width: 100%;
+      overflow-y: auto;
+    }
+
+    .p-table-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      max-height: 210px;
+      overflow-y: auto;
+    }
+
+    .p-table-btn {
+      padding: 12px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-align: left;
+    }
+    .p-table-btn.selected {
+      background: rgba(255, 190, 11, 0.25);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .p-cockpit {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    .p-top-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 8px 12px;
+      border-radius: 14px;
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+
+    .heat-wrap {
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+    }
+
+    .heat-bar-bg {
+      height: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+
+    .heat-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #06d6a0, #ffbe0b, #ef4444);
+      transition: width 0.08s linear;
+    }
+
+    .gas-btn {
+      flex: 1;
+      min-height: 170px;
+      border-radius: 28px;
+      border: 4px solid rgba(255, 255, 255, 0.25);
+      background: linear-gradient(145deg, #ffbe0b, #fb5607);
+      color: #111827;
+      font-size: 1.85rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 14px 35px rgba(251, 86, 7, 0.5);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform 0.05s;
+    }
+
+    .gas-btn:active, .gas-btn.pressed {
+      transform: scale(0.95);
+    }
+
+    .gas-btn.berserk {
+      background: linear-gradient(145deg, #ff006e, #8338ec);
+      color: #fff;
+      border-color: #fde047;
+      box-shadow: 0 0 35px rgba(255, 0, 110, 0.8);
+    }
+
+    .gas-btn.overheated {
+      background: #334155;
+      color: #94a3b8;
+      border-color: #ef4444;
+      box-shadow: none;
+    }
+
+    .gas-btn.boss-stop {
+      background: #7f1d1d;
+      color: #fecaca;
+      border-color: #ef4444;
+    }
+
+    .action-slot {
+      min-height: 68px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nitro-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 16px;
+      border: 2px solid #fde047;
+      background: linear-gradient(90deg, #2563eb, #06b6d4);
+      color: #fff;
+      font-size: 1.2rem;
+      font-weight: 900;
+      animation: pulseNitro 0.4s infinite alternate;
+      cursor: pointer;
+    }
+
+    @keyframes pulseNitro {
+      from { transform: scale(0.98); }
+      to { transform: scale(1.02); }
+    }
+
+    .sabotage-card {
+      background: linear-gradient(135deg, #991b1b, #4c0519);
+      border: 2px solid #fb7185;
+      border-radius: 14px;
+      padding: 8px 10px;
+    }
+
+    .sabotage-targets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .sab-target-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 7px 8px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .shake-panel {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+    }
+
+    .seismo-bar {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 5px;
+      position: relative;
+    }
+
+    .seismo-fill {
+      height: 100%;
+      width: 0%;
+      background: #38bdf8;
+      transition: width 0.06s linear;
+    }
+
+    /* Settings Modal */
+    #settings-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-box {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px;
+      max-width: 460px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== HOST / PROJECTOR VIEW ==================== -->
+  <div id="host-app">
+    <header class="host-topbar">
+      <div class="brand-title">🏁 ГОНКИ СТОЛОВ: КОРПОРАТИВНЫЙ ЗАЕЗД</div>
+
+      <div class="status-pills">
+        <span id="net-status-pill" class="pill warn">🟡 Подключение облака...</span>
+        <span id="players-count-pill" class="pill">👥 В зале: 0</span>
+        <span id="round-pill" class="pill">🏆 Заезд 1</span>
+      </div>
+
+      <div class="host-controls">
+        <button class="btn" id="btn-toggle-sim" title="Открыть пульт смартфона для проверки">📱 Тест пульта</button>
+        <button class="btn" id="btn-sound" title="Звук и музыка">🔊 Звук</button>
+        <button class="btn" id="btn-settings" title="Настройки сети и Supabase">⚙️</button>
+        <button class="btn btn-green" id="btn-start-race">🚀 СТАРТ ГОНКИ</button>
+        <button class="btn btn-danger hidden" id="btn-abort-race">⏹ В лобби</button>
+      </div>
+    </header>
+
+    <!-- LOBBY -->
+    <main id="lobby-screen">
+      <aside class="lobby-sidebar">
+        <div style="text-align:center;">
+          <div style="font-weight:900; font-size:1.05rem;">СКАНИРУЙ И ВРЫВАЙСЯ!</div>
+          <div style="font-size:0.8rem; color:var(--muted);">Наведи камеру телефона на QR-код</div>
+        </div>
+
+        <div class="qr-card">
+          <div id="qr-container"></div>
+          <div class="room-code-badge" id="room-code-display">КОД: ----</div>
+        </div>
+
+        <div class="field-group">
+          <label>🌐 Публичный URL игры (для QR)</label>
+          <input type="text" id="public-url-input" class="input-dark" placeholder="https://ваш-сайт.ru/index.html" />
+          <div style="display:flex; gap:6px;">
+            <button class="btn" style="flex:1; font-size:0.76rem; padding:6px;" id="btn-copy-link">📋 Копировать ссылку</button>
+            <button class="btn" style="font-size:0.76rem; padding:6px;" id="btn-new-room" title="Новый код комнаты">🔄</button>
+          </div>
+        </div>
+
+        <div style="width:100%; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div class="field-group">
+            <label>Столов (4–12)</label>
+            <select id="select-table-count" class="input-dark">
+              <option value="4">4 стола</option>
+              <option value="5">5 столов</option>
+              <option value="6" selected>6 столов</option>
+              <option value="8">8 столов</option>
+              <option value="10">10 столов</option>
+              <option value="12">12 столов</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Длительность</label>
+            <select id="select-duration" class="input-dark">
+              <option value="45">45 сек (Блиц)</option>
+              <option value="60" selected>60 сек (Идеал)</option>
+              <option value="90">90 сек (Марафон)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Режим шоу</label>
+          <select id="select-game-mode" class="input-dark">
+            <option value="single" selected>Одиночный заезд (с реваншем)</option>
+            <option value="tournament">Турнир из 3 раундов (Финал x2)</option>
+          </select>
+        </div>
+      </aside>
+
+      <section class="lobby-main">
+        <div class="lobby-toolbar">
+          <div style="font-weight:800; font-size:0.95rem;">
+            Стартовая решётка — <span style="color:var(--accent);">названия отделов можно редактировать</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" id="btn-add-bots">🤖 + Боты для массовки</button>
+            <button class="btn" id="btn-clear-bots">🧹 Убрать ботов</button>
+          </div>
+        </div>
+
+        <div class="tables-grid" id="lobby-tables-grid"></div>
+      </section>
+    </main>
+
+    <!-- RACE SCREEN -->
+    <main id="race-screen" class="hidden">
+      <div class="race-hud">
+        <div class="hud-box">
+          <div>
+            <div style="font-size:0.7rem; color:var(--muted); font-weight:800;">ОСТАЛОСЬ</div>
+            <div class="timer-big" id="hud-timer">60.0</div>
+          </div>
+          <div style="height:32px; width:1px; background:var(--border);"></div>
+          <div>
+            <div style="font-size:0.7rem; color:var(--muted); font-weight:800;">ЛИДЕР ЗАЕЗДА</div>
+            <div style="font-weight:900; color:#fff;" id="hud-leader">—</div>
+          </div>
+        </div>
+
+        <div class="hud-box">
+          <span style="font-size:0.75rem; color:var(--muted); font-weight:800;">События (1–4):</span>
+          <div class="event-hotkeys">
+            <button class="hk-btn" onclick="HostApp.triggerGlobalEvent('boss')">1 🚨 Босс</button>
+            <button class="hk-btn" onclick="HostApp.triggerGlobalEvent('bonus')">2 💸 Премия</button>
+            <button class="hk-btn" onclick="HostApp.triggerGlobalEvent('wifi')">3 📶 Wi-Fi</button>
+            <button class="hk-btn" onclick="HostApp.triggerGlobalEvent('friday')">4 🍻 Пятница</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="global-banner" class="hidden"></div>
+      <canvas id="race-canvas"></canvas>
+    </main>
+
+    <footer class="commentator-bar">
+      <span class="live-badge">ЭФИР</span>
+      <span id="commentator-text">Ждём подключения столов! Нажмите «📱 Тест пульта» или сканируйте QR-код.</span>
+    </footer>
+  </div>
+
+  <!-- ==================== PODIUM OVERLAY ==================== -->
+  <div id="podium-overlay" class="hidden">
+    <div class="podium-card">
+      <div style="font-size:0.9rem; font-weight:800; color:var(--accent); text-transform:uppercase;">Фотофиниш завершён!</div>
+      <h1 style="margin:6px 0 0; font-size:2rem; font-weight:900;" id="podium-title">🏆 ПЬЕДЕСТАЛ ПОЧЁТА</h1>
+
+      <div class="podium-places" id="podium-places"></div>
+
+      <div class="mvp-box">
+        <div style="font-size:0.8rem; font-weight:800; color:#f472b6; text-transform:uppercase;">🔥 Главный трудоголик вечера (MVP)</div>
+        <div style="font-size:1.35rem; font-weight:900; margin-top:4px;" id="mvp-display">—</div>
+      </div>
+
+      <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+        <button class="btn btn-primary" style="font-size:1.05rem; padding:12px 24px;" id="btn-rematch">🔄 Реванш / Следующий раунд (без перескана QR)</button>
+        <button class="btn" style="font-size:1.05rem; padding:12px 20px;" id="btn-back-lobby">🏠 В лобби</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SIMULATOR DRAWER ==================== -->
+  <div id="sim-drawer" class="hidden">
+    <div class="sim-header">
+      <span>📱 Симулятор смартфона гостя</span>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="btn" style="padding:3px 7px; font-size:0.72rem;" id="btn-sim-shake">🫨 Тряска</button>
+        <button class="btn" style="padding:3px 7px; font-size:0.72rem;" id="btn-close-sim">✕</button>
+      </div>
+    </div>
+    <div id="sim-mount" style="flex:1; display:flex; overflow:hidden;"></div>
+  </div>
+
+  <!-- ==================== SETTINGS MODAL ==================== -->
+  <div id="settings-modal" class="hidden">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">⚙️ Настройки подключения</h3>
+        <button class="btn" id="btn-close-settings">✕</button>
+      </div>
+      <p style="margin:0; font-size:0.84rem; color:var(--muted);">
+        По умолчанию игра работает через бесплатный облачный WebSocket (MQTT WSS) — гости подключаются сразу без ключей. Если у вас есть проект <b>Supabase</b>, вставьте ключи ниже для выделенного канала:
+      </p>
+      <div class="field-group">
+        <label>Supabase Project URL (необязательно)</label>
+        <input type="text" id="cfg-sb-url" class="input-dark" placeholder="https://xxxx.supabase.co" />
+      </div>
+      <div class="field-group">
+        <label>Supabase Anon Key (необязательно)</label>
+        <input type="text" id="cfg-sb-key" class="input-dark" placeholder="eyJhbGciOi..." />
+      </div>
+      <button class="btn btn-green" id="btn-save-settings">💾 Сохранить и переподключить</button>
+    </div>
+  </div>
+
+  <!-- ==================== PLAYER CONTROLLER TEMPLATE ==================== -->
+  <template id="player-template">
+    <div id="player-app">
+      <!-- Setup Screen -->
+      <div class="p-setup" data-view="setup">
+        <div style="text-align:center;">
+          <div style="font-size:2rem;">🏁</div>
+          <h2 style="margin:4px 0; font-weight:900;">ГОНКИ СТОЛОВ</h2>
+          <div style="font-size:0.82rem; color:var(--muted);" data-bind="conn-status">Подключение к залу...</div>
+        </div>
+
+        <div class="field-group">
+          <label>1. Выбери свой стол / отдел</label>
+          <div class="p-table-grid" data-bind="table-list"></div>
+        </div>
+
+        <div class="field-group">
+          <label>2. Твой позывной на экране</label>
+          <div style="display:flex; gap:6px;">
+            <input type="text" class="input-dark" data-bind="player-name" maxlength="22" placeholder="Введи имя..." />
+            <button class="btn" type="button" data-bind="random-name" title="Случайный ник">🎲</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>3. Болид вашего стола</label>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;" data-bind="avatar-picker"></div>
+        </div>
+
+        <button class="btn btn-primary" style="padding:14px; font-size:1.05rem;" data-bind="join-btn">🚀 ВСТАТЬ НА СТАРТ!</button>
+      </div>
+
+      <!-- Active Race / Waiting Screen -->
+      <div class="p-cockpit hidden" data-view="cockpit">
+        <div class="p-top-info">
+          <div>
+            <div style="color:var(--accent);" data-bind="my-table-title">Стол №1</div>
+            <div style="font-size:0.75rem; color:var(--muted);" data-bind="my-name-badge">Игрок</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:1.15rem; color:var(--neon-green);" data-bind="my-taps">0 тапов</div>
+            <div style="font-size:0.75rem; color:#fde047;" data-bind="my-combo">Комбо x1.0</div>
+          </div>
+        </div>
+
+        <div class="heat-wrap">
+          <div style="display:flex; justify-content:space-between; font-size:0.78rem; font-weight:800;">
+            <span data-bind="heat-label">🌡️ Температура движка</span>
+            <span data-bind="heat-pct">0%</span>
+          </div>
+          <div class="heat-bar-bg">
+            <div class="heat-bar-fill" data-bind="heat-fill"></div>
+          </div>
+        </div>
+
+        <div class="action-slot" data-bind="action-slot">
+          <div style="text-align:center; font-size:0.82rem; color:var(--muted); padding:14px 0;" data-bind="status-hint">
+            Жми кнопку ритмично — не перегрей движок!
+          </div>
+        </div>
+
+        <button class="gas-btn" data-bind="gas-btn">
+          <span style="font-size:2.4rem;" data-bind="gas-icon">🔥</span>
+          <span data-bind="gas-text">ГАЗ! РАБОТАТЬ!</span>
+          <span style="font-size:0.78rem; font-weight:700; opacity:0.85;" data-bind="gas-sub">Тапай или тряси телефон</span>
+        </button>
+
+        <div class="shake-panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:800; cursor:pointer;">
+              <input type="checkbox" data-bind="shake-toggle" />
+              <span>🫨 Режим тряски</span>
+            </label>
+            <select data-bind="shake-sens" class="input-dark" style="width:auto; padding:3px 6px; font-size:0.75rem;">
+              <option value="10">Лёгкая</option>
+              <option value="14" selected>Норма</option>
+              <option value="20">Хардкор</option>
+            </select>
+          </div>
+          <div class="seismo-bar">
+            <div class="seismo-fill" data-bind="seismo-fill"></div>
+          </div>
+          <div style="font-size:0.7rem; color:var(--muted); margin-top:4px;" data-bind="shake-status">
+            Включи галочку, чтобы разгонять болид тряской смартфона
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    /* ==========================================================================
+       1. CONSTANTS & SHARED DEFINITIONS
+       ========================================================================== */
+    const AVATARS = [
+      { id: 'chair', icon: '🚀', name: 'Менеджер на кресле', color: '#3a86ff' },
+      { id: 'pizza', icon: '🍕', name: 'Курьер с пиццей', color: '#fb5607' },
+      { id: 'cat', icon: '🐈', name: 'Кот-директор', color: '#ffbe0b' },
+      { id: 'alarm', icon: '⏰', name: 'Горящий дедлайн', color: '#ef4444' },
+      { id: 'coffee', icon: '☕', name: 'Турбо-кофемашина', color: '#10b981' },
+      { id: 'unicorn', icon: '🦄', name: 'Единорог на самокате', color: '#ec4899' }
+    ];
+
+    const FUNNY_NAMES = [
+      'Секретный агент бухгалтерии', 'Повелитель Excel', 'Король дедлайнов',
+      'Ночной тестировщик', 'Мастер перекуров', 'Гроза кулера',
+      'Амбассадор пятницы', 'Неуловимый сисадмин', 'Фея квартальных отчётов',
+      'Директор по корпоративам', 'Старший по пицце', 'Турбо-стажёр'
+    ];
+
+    const SABOTAGE_TYPES = [
+      { id: 'edits', icon: '📎', title: 'Правки в пятницу 17:55', desc: 'Замедляет соперника на 3 сек' },
+      { id: 'banana', icon: '🍌', title: 'Банановая кожура', desc: 'Крутит болид на месте 2 сек' },
+      { id: 'call', icon: '🧲', title: 'Срочный созвон', desc: 'Тянет лидера назад, вас вперёд' }
+    ];
+
+    const MQTT_BROKERS = [
+      'wss://broker.emqx.io:8084/mqtt',
+      'wss://broker.hivemq.com:8884/mqtt'
+    ];
+
+    function uid(len = 6) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s = '';
+      for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+      return s;
+    }
+
+    /* ==========================================================================
+       2. MULTI-TRANSPORT REALTIME BUS (MQTT WSS + SUPABASE + BROADCASTCHANNEL)
+       ========================================================================== */
+    class RealtimeBus {
+      constructor(roomCode, role, onMessage, onStatus) {
+        this.roomCode = roomCode;
+        this.role = role;
+        this.onMessage = onMessage;
+        this.onStatus = onStatus;
+        this.bc = null;
+        this.mqttClient = null;
+        this.sbSocket = null;
+        this.brokerIdx = 0;
+        this.closed = false;
+        this.seenIds = new Set();
+
+        this.initBroadcastChannel();
+        this.initCloud();
+      }
+
+      initBroadcastChannel() {
+        try {
+          this.bc = new BroadcastChannel(`gonki_stolov_${this.roomCode}`);
+          this.bc.onmessage = (ev) => this.handleIncoming(ev.data);
+        } catch (e) {}
+      }
+
+      initCloud() {
+        const params = new URLSearchParams(window.location.search);
+        const sbUrl = params.get('sbUrl') || localStorage.getItem('gs_sb_url') || '';
+        const sbKey = params.get('sbKey') || localStorage.getItem('gs_sb_key') || '';
+
+        if (sbUrl && sbKey) {
+          this.connectSupabase(sbUrl, sbKey);
+        } else {
+          this.connectMqtt();
+        }
+      }
+
+      connectMqtt() {
+        if (this.closed) return;
+        if (typeof mqtt === 'undefined') {
+          this.onStatus('warn', '🟡 Локальный режим (нет сети)');
+          return;
+        }
+        const url = MQTT_BROKERS[this.brokerIdx % MQTT_BROKERS.length];
+        const topic = `gonki-stolov/v2/${this.roomCode}`;
+
+        try {
+          if (this.mqttClient) {
+            try { this.mqttClient.end(true); } catch (e) {}
+          }
+          this.mqttClient = mqtt.connect(url, {
+            clientId: `gs_${this.role}_${uid(8)}`,
+            clean: true,
+            connectTimeout: 6000,
+            reconnectPeriod: 2500
+          });
+
+          this.mqttClient.on('connect', () => {
+            this.mqttClient.subscribe(topic, { qos: 0 });
+            this.onStatus('online', '🟢 Облако активно (гости могут входить)');
+          });
+
+          this.mqttClient.on('message', (_t, payload) => {
+            try {
+              const msg = JSON.parse(payload.toString());
+              this.handleIncoming(msg);
+            } catch (e) {}
+          });
+
+          this.mqttClient.on('error', () => {
+            this.brokerIdx++;
+            this.onStatus('warn', '🟡 Переключение резервного сервера...');
+          });
+        } catch (e) {
+          this.onStatus('warn', '🟡 Локальный режим');
+        }
+      }
+
+      connectSupabase(sbUrl, sbKey) {
+        try {
+          const cleanHost = sbUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          const wsUrl = `wss://${cleanHost}/realtime/v1/websocket?apikey=${encodeURIComponent(sbKey)}&vsn=1.0.0`;
+          this.sbSocket = new WebSocket(wsUrl);
+          const topic = `realtime:gonki_${this.roomCode}`;
+          let ref = 1;
+
+          this.sbSocket.onopen = () => {
+            this.sbSocket.send(JSON.stringify({
+              topic,
+              event: 'phx_join',
+              payload: { config: { broadcast: { self: false } } },
+              ref: String(ref++)
+            }));
+            this.onStatus('online', '🟢 Supabase Realtime подключён');
+            this.hbTimer = setInterval(() => {
+              if (this.sbSocket && this.sbSocket.readyState === 1) {
+                this.sbSocket.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(ref++) }));
+              }
+            }, 20000);
+          };
+
+          this.sbSocket.onmessage = (ev) => {
+            try {
+              const frame = JSON.parse(ev.data);
+              if (frame.event === 'broadcast' && frame.payload && frame.payload.payload) {
+                this.handleIncoming(frame.payload.payload);
+              }
+            } catch (e) {}
+          };
+
+          this.sbSocket.onerror = () => this.connectMqtt();
+        } catch (e) {
+          this.connectMqtt();
+        }
+      }
+
+      handleIncoming(msg) {
+        if (!msg || !msg._id) return;
+        if (this.seenIds.has(msg._id)) return;
+        this.seenIds.add(msg._id);
+        if (this.seenIds.size > 600) {
+          const first = this.seenIds.values().next().value;
+          this.seenIds.delete(first);
+        }
+        this.onMessage(msg);
+      }
+
+      send(type, data = {}) {
+        const packet = {
+          _id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type,
+          ...data
+        };
+        this.seenIds.add(packet._id);
+        const raw = JSON.stringify(packet);
+
+        if (this.bc) {
+          try { this.bc.postMessage(packet); } catch (e) {}
+        }
+        if (this.mqttClient && this.mqttClient.connected) {
+          try { this.mqttClient.publish(`gonki-stolov/v2/${this.roomCode}`, raw, { qos: 0 }); } catch (e) {}
+        }
+        if (this.sbSocket && this.sbSocket.readyState === 1) {
+          try {
+            this.sbSocket.send(JSON.stringify({
+              topic: `realtime:gonki_${this.roomCode}`,
+              event: 'broadcast',
+              payload: { type: 'broadcast', event: 'msg', payload: packet },
+              ref: '1'
+            }));
+          } catch (e) {}
+        }
+      }
+
+      destroy() {
+        this.closed = true;
+        if (this.hbTimer) clearInterval(this.hbTimer);
+        if (this.bc) this.bc.close();
+        if (this.mqttClient) try { this.mqttClient.end(true); } catch (e) {}
+        if (this.sbSocket) try { this.sbSocket.close(); } catch (e) {}
+      }
+    }
+
+    /* ==========================================================================
+       3. PROCEDURAL WEB AUDIO ENGINE (MUSIC + SFX)
+       ========================================================================== */
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+        this.musicTimer = null;
+        this.step = 0;
+      }
+
+      unlock() {
+        if (!this.enabled) return;
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+
+      tone(freq, dur = 0.12, type = 'triangle', vol = 0.15, slideTo = null) {
+        if (!this.enabled) return;
+        this.unlock();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + dur);
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur);
+      }
+
+      playNitro() {
+        this.tone(240, 0.45, 'sawtooth', 0.22, 980);
+        setTimeout(() => this.tone(520, 0.35, 'square', 0.16, 1280), 90);
+      }
+
+      playSabotage() {
+        this.tone(680, 0.28, 'sawtooth', 0.18, 160);
+      }
+
+      playBoss() {
+        this.tone(880, 0.18, 'square', 0.25, 440);
+        setTimeout(() => this.tone(880, 0.22, 'square', 0.25, 420), 210);
+      }
+
+      playBonus() {
+        [523, 659, 784, 1046].forEach((f, i) => {
+          setTimeout(() => this.tone(f, 0.16, 'triangle', 0.18), i * 65);
+        });
+      }
+
+      playFinish() {
+        [523, 659, 784, 1046, 1318].forEach((f, i) => {
+          setTimeout(() => this.tone(f, 0.35, 'triangle', 0.22), i * 110);
+        });
+      }
+
+      startRaceMusic(getTempoMult) {
+        this.stopMusic();
+        const bassNotes = [110, 110, 146.8, 130.8, 110, 110, 164.8, 146.8];
+        const tick = () => {
+          if (!this.enabled) return;
+          const mult = getTempoMult ? getTempoMult() : 1;
+          const note = bassNotes[this.step % bassNotes.length];
+          this.tone(note, 0.14, 'triangle', 0.11);
+          if (this.step % 2 === 1) {
+            this.tone(900, 0.04, 'square', 0.04, 200);
+          }
+          this.step++;
+          this.musicTimer = setTimeout(tick, Math.max(115, Math.round(210 / mult)));
+        };
+        tick();
+      }
+
+      stopMusic() {
+        if (this.musicTimer) clearTimeout(this.musicTimer);
+        this.musicTimer = null;
+      }
+    }
+
+    const SFX = new SoundFX();
+
+    /* ==========================================================================
+       4. HOST / PROJECTOR GAME ENGINE
+       ========================================================================== */
+    const HostApp = {
+      roomCode: localStorage.getItem('gs_room_code') || uid(4),
+      bus: null,
+      phase: 'lobby', // lobby | racing | slowmo | podium
+      roundNum: 1,
+      gameMode: 'single',
+      duration: 60,
+      timeLeft: 60,
+      tables: [],
+      players: {}, // id -> { id, name, tableId, isBot, totalTaps, validTaps, lastTapTs, secWindowCount, secWindowStart, comboMult, isOverheated }
+      pickups: [],
+      projectiles: [],
+      particles: [],
+      bubbles: [],
+      activeGlobalEvent: null, // { type, endTime }
+      triggeredMilestones: { 30: false, 60: false, 85: false },
+      cameraShake: 0,
+      winnerFinishTime: null,
+      lastFrameTs: 0,
+      broadcastInterval: null,
+      botInterval: null,
+
+      init() {
+        localStorage.setItem('gs_room_code', this.roomCode);
+        document.getElementById('room-code-display').textContent = `КОД: ${this.roomCode}`;
+
+        const savedPubUrl = localStorage.getItem('gs_public_url') || (window.location.protocol.startsWith('http') ? window.location.href.split('?')[0] : '');
+        document.getElementById('public-url-input').value = savedPubUrl;
+
+        this.buildTables(6);
+        this.connectBus();
+        this.renderQR();
+        this.renderLobby();
+        this.bindUI();
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('keydown', (e) => {
+          if (this.phase !== 'racing') return;
+          if (e.key === '1') this.triggerGlobalEvent('boss');
+          if (e.key === '2') this.triggerGlobalEvent('bonus');
+          if (e.key === '3') this.triggerGlobalEvent('wifi');
+          if (e.key === '4') this.triggerGlobalEvent('friday');
+        });
+
+        requestAnimationFrame((ts) => this.loop(ts));
+      },
+
+      connectBus() {
+        if (this.bus) this.bus.destroy();
+        this.bus = new RealtimeBus(
+          this.roomCode,
+          'host',
+          (msg) => this.onNetworkMessage(msg),
+          (cls, text) => {
+            const pill = document.getElementById('net-status-pill');
+            pill.className = `pill ${cls}`;
+            pill.textContent = text;
+          }
+        );
+
+        if (this.broadcastInterval) clearInterval(this.broadcastInterval);
+        this.broadcastInterval = setInterval(() => this.broadcastState(), 140);
+      },
+
+      buildTables(count) {
+        const old = this.tables;
+        this.tables = [];
+        for (let i = 0; i < count; i++) {
+          const prev = old[i];
+          this.tables.push({
+            id: i + 1,
+            name: prev ? prev.name : `Стол №${i + 1}`,
+            avatarId: prev ? prev.avatarId : AVATARS[i % AVATARS.length].id,
+            progress: 0, // 0..100
+            speed: 0,
+            recentTaps: 0,
+            nitroUntil: 0,
+            nitroPromptEnd: 0,
+            nitroPressers: new Set(),
+            slowUntil: 0,
+            spinUntil: 0,
+            shieldUntil: 0,
+            finishTime: null,
+            tournamentPoints: prev ? prev.tournamentPoints : 0
+          });
+        }
+        // Reassign out-of-range players
+        Object.values(this.players).forEach((p) => {
+          if (p.tableId > count) p.tableId = 1;
+        });
+      },
+
+      getJoinUrl() {
+        const customBase = document.getElementById('public-url-input').value.trim();
+        let base = customBase || window.location.href.split('?')[0];
+        const url = new URL(base.startsWith('http') ? base : `https://${base}`);
+        url.searchParams.set('role', 'player');
+        url.searchParams.set('room', this.roomCode);
+
+        const sbUrl = localStorage.getItem('gs_sb_url');
+        const sbKey = localStorage.getItem('gs_sb_key');
+        if (sbUrl && sbKey) {
+          url.searchParams.set('sbUrl', sbUrl);
+          url.searchParams.set('sbKey', sbKey);
+        }
+        return url.toString();
+      },
+
+      renderQR() {
+        const container = document.getElementById('qr-container');
+        container.innerHTML = '';
+        let joinUrl = '';
+        try {
+          joinUrl = this.getJoinUrl();
+        } catch (e) {
+          joinUrl = `${window.location.href.split('?')[0]}?role=player&room=${this.roomCode}`;
+        }
+
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(container, {
+            text: joinUrl,
+            width: 192,
+            height: 192,
+            colorDark: '#0f172a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } else {
+          container.innerHTML = `<div style="color:#0f172a;font-size:11px;word-break:break-all;padding:8px;">${joinUrl}</div>`;
+        }
+      },
+
+      bindUI() {
+        document.getElementById('public-url-input').addEventListener('input', (e) => {
+          localStorage.setItem('gs_public_url', e.target.value.trim());
+          this.renderQR();
+        });
+
+        document.getElementById('btn-copy-link').onclick = () => {
+          const link = this.getJoinUrl();
+          navigator.clipboard?.writeText(link);
+          this.say(`📋 Ссылка скопирована: ${link}`);
+        };
+
+        document.getElementById('btn-new-room').onclick = () => {
+          this.roomCode = uid(4);
+          localStorage.setItem('gs_room_code', this.roomCode);
+          document.getElementById('room-code-display').textContent = `КОД: ${this.roomCode}`;
+          this.players = {};
+          this.connectBus();
+          this.renderQR();
+          this.renderLobby();
+        };
+
+        document.getElementById('select-table-count').onchange = (e) => {
+          this.buildTables(Number(e.target.value));
+          this.renderLobby();
+          this.broadcastState();
+        };
+
+        document.getElementById('select-duration').onchange = (e) => {
+          this.duration = Number(e.target.value);
+        };
+
+        document.getElementById('select-game-mode').onchange = (e) => {
+          this.gameMode = e.target.value;
+        };
+
+        document.getElementById('btn-add-bots').onclick = () => {
+          this.tables.forEach((t) => {
+            const botId = `bot_${t.id}_${uid(3)}`;
+            this.players[botId] = {
+              id: botId,
+              name: `🤖 Бот-${t.id}`,
+              tableId: t.id,
+              isBot: true,
+              totalTaps: 0,
+              validTaps: 0,
+              lastTapTs: 0,
+              secWindowCount: 0,
+              secWindowStart: Date.now(),
+              comboMult: 1.1,
+              isOverheated: false
+            };
+          });
+          this.renderLobby();
+          this.say('🤖 Тестовые боты заняли места за столами!');
+        };
+
+        document.getElementById('btn-clear-bots').onclick = () => {
+          Object.keys(this.players).forEach((id) => {
+            if (this.players[id].isBot) delete this.players[id];
+          });
+          this.renderLobby();
+        };
+
+        document.getElementById('btn-sound').onclick = (e) => {
+          SFX.enabled = !SFX.enabled;
+          e.target.textContent = SFX.enabled ? '🔊 Звук' : '🔇 Без звука';
+          if (!SFX.enabled) SFX.stopMusic();
+        };
+
+        document.getElementById('btn-settings').onclick = () => {
+          document.getElementById('cfg-sb-url').value = localStorage.getItem('gs_sb_url') || '';
+          document.getElementById('cfg-sb-key').value = localStorage.getItem('gs_sb_key') || '';
+          document.getElementById('settings-modal').classList.remove('hidden');
+        };
+        document.getElementById('btn-close-settings').onclick = () => {
+          document.getElementById('settings-modal').classList.add('hidden');
+        };
+        document.getElementById('btn-save-settings').onclick = () => {
+          const u = document.getElementById('cfg-sb-url').value.trim();
+          const k = document.getElementById('cfg-sb-key').value.trim();
+          if (u) localStorage.setItem('gs_sb_url', u); else localStorage.removeItem('gs_sb_url');
+          if (k) localStorage.setItem('gs_sb_key', k); else localStorage.removeItem('gs_sb_key');
+          document.getElementById('settings-modal').classList.add('hidden');
+          this.connectBus();
+          this.renderQR();
+        };
+
+        document.getElementById('btn-start-race').onclick = () => this.startRace();
+        document.getElementById('btn-abort-race').onclick = () => this.returnToLobby();
+        document.getElementById('btn-rematch').onclick = () => this.nextRoundOrRematch();
+        document.getElementById('btn-back-lobby').onclick = () => this.returnToLobby();
+
+        // Simulator Drawer
+        document.getElementById('btn-toggle-sim').onclick = () => {
+          const drawer = document.getElementById('sim-drawer');
+          drawer.classList.toggle('hidden');
+          if (!drawer.classList.contains('hidden') && !window._simController) {
+            window._simController = new PlayerController(document.getElementById('sim-mount'), this.roomCode, true);
+          }
+        };
+        document.getElementById('btn-close-sim').onclick = () => {
+          document.getElementById('sim-drawer').classList.add('hidden');
+        };
+        document.getElementById('btn-sim-shake').onclick = () => {
+          if (window._simController) window._simController.simulateShakePulse();
+        };
+      },
+
+      onNetworkMessage(msg) {
+        if (msg.type === 'hello') {
+          this.broadcastState();
+          return;
+        }
+
+        if (msg.type === 'join') {
+          const existing = this.players[msg.playerId];
+          this.players[msg.playerId] = {
+            id: msg.playerId,
+            name: (msg.name || 'Гость').slice(0, 22),
+            tableId: Math.min(this.tables.length, Math.max(1, Number(msg.tableId) || 1)),
+            isBot: false,
+            totalTaps: existing ? existing.totalTaps : (Number(msg.totalTaps) || 0),
+            validTaps: existing ? existing.validTaps : (Number(msg.totalTaps) || 0),
+            lastTapTs: 0,
+            secWindowCount: 0,
+            secWindowStart: Date.now(),
+            comboMult: 1,
+            isOverheated: false
+          };
+          if (msg.avatarId) {
+            const t = this.tables.find((x) => x.id === this.players[msg.playerId].tableId);
+            if (t) t.avatarId = msg.avatarId;
+          }
+          if (this.phase === 'lobby') this.renderLobby();
+          this.broadcastState();
+          return;
+        }
+
+        if (msg.type === 'tap_batch') {
+          const p = this.players[msg.playerId];
+          if (!p || this.phase !== 'racing') return;
+
+          const now = Date.now();
+          // Boss event penalty check!
+          if (this.activeGlobalEvent && this.activeGlobalEvent.type === 'boss') {
+            const t = this.tables.find((x) => x.id === p.tableId);
+            if (t && msg.delta > 0) {
+              t.progress = Math.max(0, t.progress - 1.4);
+              this.spawnBubble(t.id, '🚨 БОСС ЗАМЕТИЛ!');
+              this.say(`🚨 ${p.name} (${t.name}) не успел затормозить перед Боссом — штраф!`);
+              SFX.playBoss();
+            }
+            return;
+          }
+
+          // Server-side anti-autoclicker (max 13 valid taps per second)
+          if (now - p.secWindowStart > 1000) {
+            p.secWindowStart = now;
+            p.secWindowCount = 0;
+          }
+          const allowed = Math.max(0, 13 - p.secWindowCount);
+          const accepted = Math.min(allowed, Math.max(0, Number(msg.delta) || 0));
+          p.secWindowCount += accepted;
+          p.validTaps += accepted;
+          p.totalTaps = Math.max(p.validTaps, Number(msg.totalTaps) || p.validTaps);
+          p.comboMult = Math.min(2.0, Math.max(1.0, Number(msg.comboMult) || 1.0));
+          p.isOverheated = Boolean(msg.isOverheated);
+
+          const table = this.tables.find((x) => x.id === p.tableId);
+          if (table && accepted > 0 && !p.isOverheated) {
+            table.recentTaps += accepted * p.comboMult;
+          }
+          return;
+        }
+
+        if (msg.type === 'nitro_press') {
+          const t = this.tables.find((x) => x.id === Number(msg.tableId));
+          if (!t || Date.now() > t.nitroPromptEnd) return;
+          t.nitroPressers.add(msg.playerId);
+          const members = Object.values(this.players).filter((p) => p.tableId === t.id);
+          const needed = Math.max(1, Math.ceil(members.length * 0.7));
+          if (t.nitroPressers.size >= needed) {
+            t.nitroPromptEnd = 0;
+            t.nitroUntil = Date.now() + 3200;
+            this.cameraShake = 12;
+            SFX.playNitro();
+            this.spawnBubble(t.id, '⚡ КОМАНДНОЕ НИТРО!');
+            this.say(`🔥 ${t.name} синхронно вжал НИТРО и рвётся вперёд!`);
+          }
+          return;
+        }
+
+        if (msg.type === 'sabotage') {
+          const attacker = this.tables.find((x) => x.id === Number(msg.fromTableId));
+          const target = this.tables.find((x) => x.id === Number(msg.targetTableId));
+          if (!attacker || !target || attacker.id === target.id) return;
+          this.applySabotage(attacker, target, msg.sabotageId);
+        }
+      },
+
+      renderLobby() {
+        const allPlayers = Object.values(this.players);
+        const realCount = allPlayers.filter((p) => !p.isBot).length;
+        const botCount = allPlayers.filter((p) => p.isBot).length;
+        document.getElementById('players-count-pill').textContent =
+          `👥 В зале: ${realCount}${botCount ? ` (+${botCount} 🤖)` : ''}`;
+
+        const grid = document.getElementById('lobby-tables-grid');
+        grid.innerHTML = '';
+
+        this.tables.forEach((t) => {
+          const members = allPlayers.filter((p) => p.tableId === t.id);
+          const card = document.createElement('div');
+          card.className = `table-card ${members.length ? 'has-players' : ''}`;
+
+          const avHtml = AVATARS.map((a) => `
+            <button type="button" class="av-chip ${t.avatarId === a.id ? 'active' : ''}" title="${a.name}" data-tid="${t.id}" data-avid="${a.id}">
+              ${a.icon}
+            </button>
+          `).join('');
+
+          const tagsHtml = members.length
+            ? members.map((m) => `
+                <span class="player-tag ${m.isBot ? 'bot' : ''}">
+                  ${m.name}
+                  <span class="kick-btn" data-kick="${m.id}" title="Убрать">✕</span>
+                </span>
+              `).join('')
+            : `<span style="font-size:0.78rem; color:var(--muted);">Пока никого — ждём игроков...</span>`;
+
+          card.innerHTML = `
+            <div class="table-card-header">
+              <input class="table-name-input" value="${t.name}" data-rename="${t.id}" />
+              <span class="pill" style="padding:2px 8px;">${members.length} чел.</span>
+            </div>
+            <div class="avatar-selector">${avHtml}</div>
+            <div class="player-tags">${tagsHtml}</div>
+          `;
+          grid.appendChild(card);
+        });
+
+        grid.querySelectorAll('[data-rename]').forEach((inp) => {
+          inp.oninput = (e) => {
+            const t = this.tables.find((x) => x.id === Number(e.target.dataset.rename));
+            if (t) t.name = e.target.value || `Стол №${t.id}`;
+          };
+        });
+
+        grid.querySelectorAll('[data-avid]').forEach((btn) => {
+          btn.onclick = (e) => {
+            const t = this.tables.find((x) => x.id === Number(e.currentTarget.dataset.tid));
+            if (t) {
+              t.avatarId = e.currentTarget.dataset.avid;
+              this.renderLobby();
+              this.broadcastState();
+            }
+          };
+        });
+
+        grid.querySelectorAll('[data-kick]').forEach((btn) => {
+          btn.onclick = (e) => {
+            delete this.players[e.currentTarget.dataset.kick];
+            this.renderLobby();
+            this.broadcastState();
+          };
+        });
+      },
+
+      startRace() {
+        SFX.unlock();
+        if (Object.keys(this.players).length === 0) {
+          document.getElementById('btn-add-bots').click();
+        }
+
+        this.phase = 'racing';
+        this.timeLeft = this.duration;
+        this.winnerFinishTime = null;
+        this.activeGlobalEvent = null;
+        this.triggeredMilestones = { 30: false, 60: false, 85: false };
+        this.pickups = [];
+        this.projectiles = [];
+        this.particles = [];
+        this.bubbles = [];
+
+        Object.values(this.players).forEach((p) => {
+          p.totalTaps = 0;
+          p.validTaps = 0;
+          p.comboMult = 1;
+          p.isOverheated = false;
+        });
+
+        this.tables.forEach((t, idx) => {
+          t.progress = 0;
+          t.speed = 0;
+          t.recentTaps = 0;
+          t.nitroUntil = 0;
+          t.nitroPromptEnd = 0;
+          t.nitroPressers.clear();
+          t.slowUntil = 0;
+          t.spinUntil = 0;
+          t.shieldUntil = 0;
+          t.finishTime = null;
+
+          // Spawn interactive pickups along each lane
+          [24, 52, 78].forEach((pos) => {
+            const types = ['coffee', 'papers', 'mystery'];
+            this.pickups.push({
+              lane: idx,
+              xPct: pos + (Math.random() * 8 - 4),
+              type: types[Math.floor(Math.random() * types.length)],
+              taken: false
+            });
+          });
+        });
+
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('podium-overlay').classList.add('hidden');
+        document.getElementById('race-screen').classList.remove('hidden');
+        document.getElementById('btn-start-race').classList.add('hidden');
+        document.getElementById('btn-abort-race').classList.remove('hidden');
+        document.getElementById('global-banner').classList.add('hidden');
+
+        this.resizeCanvas();
+        this.say(`🚦 РАУНД ${this.roundNum} СТАРТОВАЛ! Жмите ГАЗ на телефонах!`);
+        SFX.startRaceMusic(() => (this.activeGlobalEvent?.type === 'friday' ? 1.45 : 1.0));
+
+        if (this.botInterval) clearInterval(this.botInterval);
+        this.botInterval = setInterval(() => this.tickBots(), 250);
+
+        if (this.specialsTimer) clearInterval(this.specialsTimer);
+        this.specialsTimer = setInterval(() => this.dispatchTeamSpecials(), 11000);
+
+        this.broadcastState();
+      },
+
+      tickBots() {
+        if (this.phase !== 'racing') return;
+        if (this.activeGlobalEvent?.type === 'boss') return; // bots obey boss!
+        Object.values(this.players).forEach((p) => {
+          if (!p.isBot) return;
+          const taps = 1 + Math.floor(Math.random() * 3);
+          p.validTaps += taps;
+          p.totalTaps += taps;
+          const t = this.tables.find((x) => x.id === p.tableId);
+          if (t) t.recentTaps += taps * 1.15;
+        });
+      },
+
+      dispatchTeamSpecials() {
+        if (this.phase !== 'racing') return;
+        const sorted = [...this.tables].sort((a, b) => b.progress - a.progress);
+        // Rubber-banding: trailing/middle tables get Nitro & Sabotage more often
+        const trailing = sorted.slice(Math.floor(sorted.length / 2));
+        const nitroTable = trailing[Math.floor(Math.random() * trailing.length)] || sorted[0];
+
+        if (nitroTable) {
+          nitroTable.nitroPromptEnd = Date.now() + 2800;
+          nitroTable.nitroPressers.clear();
+          this.say(`⚡ ${nitroTable.name}: НА ТЕЛЕФОНАХ ЗАГОРЕЛОСЬ НИТРО! КРИЧИТЕ «ЖМИ!»`);
+        }
+
+        // Send sabotage card to a random trailing player
+        const sabTable = trailing[Math.floor(Math.random() * trailing.length)];
+        if (sabTable) {
+          const candidates = Object.values(this.players).filter((p) => p.tableId === sabTable.id && !p.isBot);
+          const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+          const card = SABOTAGE_TYPES[Math.floor(Math.random() * SABOTAGE_TYPES.length)];
+          if (chosen) {
+            this.bus.send('give_sabotage', { targetPlayerId: chosen.id, card });
+          } else {
+            // Bot uses sabotage on leader
+            const leader = sorted[0];
+            if (leader && leader.id !== sabTable.id) {
+              this.applySabotage(sabTable, leader, card.id);
+            }
+          }
+        }
+      },
+
+      applySabotage(attacker, target, sabotageId) {
+        const now = Date.now();
+        const card = SABOTAGE_TYPES.find((c) => c.id === sabotageId) || SABOTAGE_TYPES[0];
+        const fromIdx = this.tables.findIndex((x) => x.id === attacker.id);
+        const toIdx = this.tables.findIndex((x) => x.id === target.id);
+
+        this.projectiles.push({
+          fromIdx,
+          toIdx,
+          icon: card.icon,
+          progress: 0
+        });
+
+        if (target.shieldUntil > now) {
+          this.spawnBubble(target.id, '🛡️ ЩИТ ОТБИЛ ДИВЕРСИЮ!');
+          this.say(`🛡️ ${target.name} отразил «${card.title}» от ${attacker.name}!`);
+          return;
+        }
+
+        SFX.playSabotage();
+        this.cameraShake = 8;
+
+        if (sabotageId === 'edits') {
+          target.slowUntil = now + 3200;
+          this.spawnBubble(target.id, '📎 НА ДОРАБОТКУ!');
+          this.say(`📎 ${attacker.name} закинул «Правки в пятницу» столу «${target.name}»!`);
+        } else if (sabotageId === 'banana') {
+          target.spinUntil = now + 2200;
+          this.spawnBubble(target.id, '🍌 УИИИИИ!');
+          this.say(`🍌 ${target.name} поскользнулся на кожуре от стола «${attacker.name}»!`);
+        } else if (sabotageId === 'call') {
+          target.progress = Math.max(0, target.progress - 3.5);
+          attacker.progress = Math.min(99, attacker.progress + 2.5);
+          this.spawnBubble(target.id, '🧲 СРОЧНЫЙ СОЗВОН!');
+          this.say(`🧲 ${attacker.name} вытянул «${target.name}» на срочный созвон!`);
+        }
+      },
+
+      triggerGlobalEvent(type) {
+        if (this.phase !== 'racing') return;
+        const now = Date.now();
+        const banner = document.getElementById('global-banner');
+        banner.classList.remove('hidden', 'banner-boss', 'banner-bonus', 'banner-wifi', 'banner-friday');
+
+        if (type === 'boss') {
+          this.activeGlobalEvent = { type: 'boss', endTime: now + 3200 };
+          banner.classList.add('banner-boss');
+          banner.textContent = '👁️🚨 БОСС ИДЁТ! СТОП! НЕ ЖАТЬ 3 СЕКУНДЫ!';
+          SFX.playBoss();
+          this.cameraShake = 14;
+          this.say('🚨 ВНИМАНИЕ! БОСС СМОТРИТ НА ЭКРАН — ЗАМРИТЕ!');
+        } else if (type === 'bonus') {
+          this.activeGlobalEvent = { type: 'bonus', endTime: now + 5000 };
+          banner.classList.add('banner-bonus');
+          banner.textContent = '💸 ПРИШЛА ПРЕМИЯ! СКОРОСТЬ x2 ДЛЯ ВСЕХ!';
+          SFX.playBonus();
+          this.say('💸 ПРЕМИЯ НА КАРТЕ! Все болиды ускорились вдвое!');
+        } else if (type === 'wifi') {
+          this.activeGlobalEvent = { type: 'wifi', endTime: now + 3500 };
+          banner.classList.add('banner-wifi');
+          banner.textContent = '📶 УПАЛ КОРПОРАТИВНЫЙ WI-FI! ЛАГИ НА ТРАССЕ!';
+          SFX.playSabotage();
+          this.say('📶 Кто-то споткнулся о роутер — все буксуют!');
+        } else if (type === 'friday') {
+          this.activeGlobalEvent = { type: 'friday', endTime: now + 12000 };
+          banner.classList.add('banner-friday');
+          banner.textContent = '🍻 ПЯТНИЦА 18:00 — ФИНИШНЫЙ ФОРСАЖ!';
+          SFX.playNitro();
+          this.say('🍻 ПЯТНИЦА 18:00! До бара рукой подать — ЖМИ НА ВСЕ ДЕНЬГИ!');
+        }
+        this.broadcastState();
+      },
+
+      spawnBubble(tableId, text) {
+        this.bubbles.push({ tableId, text, ttl: 2.2 });
+      },
+
+      say(text) {
+        document.getElementById('commentator-text').textContent = text;
+      },
+
+      broadcastState() {
+        const now = Date.now();
+        this.bus.send('state', {
+          phase: this.phase,
+          roundNum: this.roundNum,
+          tables: this.tables.map((t) => ({
+            id: t.id,
+            name: t.name,
+            avatarId: t.avatarId,
+            progress: Math.round(t.progress * 10) / 10,
+            nitroActive: t.nitroPromptEnd > now
+          })),
+          globalEvent: this.activeGlobalEvent && this.activeGlobalEvent.endTime > now
+            ? this.activeGlobalEvent.type
+            : null
+        });
+      },
+
+      resizeCanvas() {
+        const canvas = document.getElementById('race-canvas');
+        if (!canvas) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = Math.max(640, rect.width);
+        canvas.height = Math.max(360, rect.height);
+      },
+
+      loop(ts) {
+        const dt = Math.min(0.05, (ts - (this.lastFrameTs || ts)) / 1000);
+        this.lastFrameTs = ts;
+
+        if (this.phase === 'racing' || this.phase === 'slowmo') {
+          this.updatePhysics(dt);
+          this.drawRace();
+        }
+        requestAnimationFrame((t) => this.loop(t));
+      },
+
+      updatePhysics(dt) {
+        const now = Date.now();
+        const timeScale = this.phase === 'slowmo' ? 0.22 : 1.0;
+        const effDt = dt * timeScale;
+
+        if (this.phase === 'racing') {
+          this.timeLeft = Math.max(0, this.timeLeft - dt);
+          document.getElementById('hud-timer').textContent = this.timeLeft.toFixed(1);
+        }
+
+        // Expire global event banner
+        if (this.activeGlobalEvent && now > this.activeGlobalEvent.endTime) {
+          this.activeGlobalEvent = null;
+          document.getElementById('global-banner').classList.add('hidden');
+        }
+
+        const allPlayers = Object.values(this.players);
+        const sortedByProg = [...this.tables].sort((a, b) => b.progress - a.progress);
+        const leader = sortedByProg[0];
+        if (leader) {
+          document.getElementById('hud-leader').textContent = `${leader.name} (${Math.min(100, Math.round(leader.progress))}%)`;
+
+          // Automatic track events at 30%, 60%, 85%
+          if (this.phase === 'racing') {
+            if (!this.triggeredMilestones[30] && leader.progress >= 30) {
+              this.triggeredMilestones[30] = true;
+              this.triggerGlobalEvent('bonus');
+            }
+            if (!this.triggeredMilestones[60] && leader.progress >= 60) {
+              this.triggeredMilestones[60] = true;
+              this.triggerGlobalEvent('boss');
+            }
+            if (!this.triggeredMilestones[85] && leader.progress >= 85) {
+              this.triggeredMilestones[85] = true;
+              this.triggerGlobalEvent('friday');
+            }
+          }
+        }
+
+        // Update each table's velocity & progress
+        this.tables.forEach((t, idx) => {
+          const members = allPlayers.filter((p) => p.tableId === t.id);
+          const count = Math.max(1, members.length);
+
+          // Average taps per player + up to +10% mass bonus
+          const avgTapImpulse = t.recentTaps / count;
+          t.recentTaps = 0;
+
+          const massBonus = 1 + Math.min(0.10, (members.length - 1) * 0.015);
+          let mult = massBonus;
+
+          if (t.nitroUntil > now) mult *= 2.15;
+          if (t.slowUntil > now) mult *= 0.42;
+          if (t.spinUntil > now) mult *= 0.15;
+          if (this.activeGlobalEvent?.type === 'bonus') mult *= 1.85;
+          if (this.activeGlobalEvent?.type === 'wifi') mult *= 0.55;
+          if (this.activeGlobalEvent?.type === 'friday') mult *= 1.35;
+
+          // Target speed in % per second (balanced for ~60s race)
+          const targetSpeed = Math.min(9.5, (0.35 + avgTapImpulse * 0.95) * mult);
+          t.speed += (targetSpeed - t.speed) * Math.min(1, effDt * 6);
+          t.progress += t.speed * effDt;
+
+          // Spawn exhaust particles
+          if (t.speed > 1.2 && Math.random() < 0.45) {
+            this.particles.push({
+              lane: idx,
+              xPct: t.progress - 1.5,
+              vx: -15 - Math.random() * 20,
+              vy: (Math.random() - 0.5) * 18,
+              life: 0.55,
+              color: t.nitroUntil > now ? '#38bdf8' : (this.activeGlobalEvent?.type === 'friday' ? '#fb5607' : '#cbd5e1')
+            });
+          }
+
+          // Check pickups
+          this.pickups.forEach((pk) => {
+            if (!pk.taken && pk.lane === idx && Math.abs(t.progress - pk.xPct) < 2.2) {
+              pk.taken = true;
+              if (pk.type === 'coffee') {
+                t.nitroUntil = Math.max(t.nitroUntil, now + 1800);
+                this.spawnBubble(t.id, '☕ ЭСПРЕССО-БУСТ!');
+              } else if (pk.type === 'papers') {
+                t.slowUntil = Math.max(t.slowUntil, now + 1300);
+                this.spawnBubble(t.id, '📄 СТОПКА ОТЧЁТОВ!');
+              } else {
+                t.shieldUntil = now + 6000;
+                this.spawnBubble(t.id, '🛡️ ЩИТ ОТ ПРАВОК!');
+              }
+            }
+          });
+
+          // Check finish line
+          if (t.progress >= 100 && !t.finishTime) {
+            t.finishTime = (this.duration - this.timeLeft).toFixed(2);
+            if (this.phase === 'racing') {
+              this.phase = 'slowmo';
+              this.winnerFinishTime = now;
+              SFX.playFinish();
+              this.say(`🏁 ФОТОФИНИШ! ${t.name} пересекает черту первым!`);
+            }
+          }
+        });
+
+        // Projectiles & bubbles
+        this.projectiles.forEach((pr) => { pr.progress += effDt * 2.2; });
+        this.projectiles = this.projectiles.filter((pr) => pr.progress < 1);
+
+        this.bubbles.forEach((b) => { b.ttl -= dt; });
+        this.bubbles = this.bubbles.filter((b) => b.ttl > 0);
+
+        this.particles.forEach((pt) => {
+          pt.xPct += pt.vx * effDt * 0.12;
+          pt.life -= effDt;
+        });
+        this.particles = this.particles.filter((pt) => pt.life > 0);
+
+        if (this.cameraShake > 0) this.cameraShake = Math.max(0, this.cameraShake - dt * 28);
+
+        // End race condition
+        if ((this.phase === 'slowmo' && now - this.winnerFinishTime > 1600) || (this.phase === 'racing' && this.timeLeft <= 0)) {
+          this.finishRace();
+        }
+      },
+
+      drawRace() {
+        const canvas = document.getElementById('race-canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const now = Date.now();
+
+        ctx.save();
+        if (this.cameraShake > 0.2) {
+          ctx.translate((Math.random() - 0.5) * this.cameraShake, (Math.random() - 0.5) * this.cameraShake);
+        }
+
+        const leaderProg = Math.max(...this.tables.map((t) => t.progress), 0);
+
+        // 1. Dynamic 3-Zone Parallax Background (Office -> Night City -> Tropical Beach)
+        const skyGrad = ctx.createLinearGradient(0, 0, W, 0);
+        if (leaderProg < 38) {
+          skyGrad.addColorStop(0, '#1e293b');
+          skyGrad.addColorStop(1, '#334155');
+        } else if (leaderProg < 75) {
+          skyGrad.addColorStop(0, '#0f172a');
+          skyGrad.addColorStop(1, '#311042');
+        } else {
+          skyGrad.addColorStop(0, '#0369a1');
+          skyGrad.addColorStop(1, '#f59e0b');
+        }
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Scenery props along top strip
+        const topMargin = 78;
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        for (let i = 0; i < 10; i++) {
+          const sx = ((i * 220 - leaderProg * 14) % (W + 220) + (W + 220)) % (W + 220) - 80;
+          ctx.font = '26px sans-serif';
+          const propIcon = leaderProg < 38 ? '🖨️' : (leaderProg < 75 ? '🏙️' : '🌴');
+          ctx.fillText(propIcon, sx, topMargin - 10);
+        }
+
+        // 2. Track Lanes
+        const trackTop = topMargin;
+        const trackHeight = H - trackTop - 16;
+        const laneH = trackHeight / this.tables.length;
+        const startX = 175;
+        const finishX = W - 95;
+        const trackSpan = Math.max(200, finishX - startX);
+
+        // Checkered Finish Line
+        const sq = 12;
+        for (let y = trackTop; y < trackTop + trackHeight; y += sq) {
+          for (let col = 0; col < 2; col++) {
+            ctx.fillStyle = ((Math.floor(y / sq) + col) % 2 === 0) ? '#ffffff' : '#0f172a';
+            ctx.fillRect(finishX + col * sq, y, sq, sq);
+          }
+        }
+
+        const sorted = [...this.tables].sort((a, b) => b.progress - a.progress);
+        const leaderId = sorted[0]?.id;
+
+        this.tables.forEach((t, idx) => {
+          const y0 = trackTop + idx * laneH;
+          const yc = y0 + laneH * 0.52;
+
+          // Alternating lane asphalt
+          ctx.fillStyle = idx % 2 === 0 ? 'rgba(15, 23, 42, 0.78)' : 'rgba(30, 41, 59, 0.72)';
+          ctx.fillRect(0, y0, W, laneH);
+
+          // Dashed lane divider
+          ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+          ctx.setLineDash([14, 14]);
+          ctx.beginPath();
+          ctx.moveTo(0, y0);
+          ctx.lineTo(W, y0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Left Leaderboard Badge
+          const rank = sorted.findIndex((x) => x.id === t.id) + 1;
+          ctx.fillStyle = rank === 1 ? 'rgba(255, 190, 11, 0.22)' : 'rgba(0, 0, 0, 0.45)';
+          ctx.fillRect(8, y0 + 5, 152, laneH - 10);
+
+          ctx.fillStyle = rank === 1 ? '#ffbe0b' : '#f8fafc';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.fillText(`#${rank} ${t.name.slice(0, 13)}`, 14, yc - 2);
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(`${Math.min(100, Math.round(t.progress))}%`, 14, yc + 15);
+        });
+
+        // 3. Pickups
+        this.pickups.forEach((pk) => {
+          if (pk.taken) return;
+          const px = startX + (pk.xPct / 100) * trackSpan;
+          const py = trackTop + pk.lane * laneH + laneH * 0.55;
+          ctx.font = '22px sans-serif';
+          const icon = pk.type === 'coffee' ? '☕' : (pk.type === 'papers' ? '📄' : '❓');
+          ctx.fillText(icon, px - 11, py + 7);
+        });
+
+        // 4. Exhaust Particles
+        this.particles.forEach((pt) => {
+          const px = startX + (pt.xPct / 100) * trackSpan;
+          const py = trackTop + pt.lane * laneH + laneH * 0.55;
+          ctx.fillStyle = pt.color;
+          ctx.globalAlpha = Math.max(0, pt.life);
+          ctx.beginPath();
+          ctx.arc(px, py, 5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        // 5. Animated Bolides (Squash & Stretch + Status Effects)
+        this.tables.forEach((t, idx) => {
+          const x = startX + (Math.min(102, t.progress) / 100) * trackSpan;
+          const y = trackTop + idx * laneH + laneH * 0.54;
+          const av = AVATARS.find((a) => a.id === t.avatarId) || AVATARS[0];
+
+          ctx.save();
+          ctx.translate(x, y);
+
+          // Spin effect (Banana peel)
+          if (t.spinUntil > now) {
+            ctx.rotate((now / 90) % (Math.PI * 2));
+          } else {
+            // Subtle bounce & tilt by speed
+            const bounce = Math.sin(now / 70 + idx) * Math.min(4, t.speed * 0.7);
+            ctx.translate(0, bounce);
+            const stretchX = 1 + Math.min(0.18, t.speed * 0.02);
+            const stretchY = 1 / stretchX;
+            ctx.scale(stretchX, stretchY);
+          }
+
+          // Shield aura
+          if (t.shieldUntil > now) {
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, 26, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          // Nitro flame
+          if (t.nitroUntil > now) {
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.moveTo(-18, -8);
+            ctx.lineTo(-42 - Math.random() * 14, 0);
+            ctx.lineTo(-18, 8);
+            ctx.fill();
+          }
+
+          // Vehicle platform capsule
+          ctx.fillStyle = av.color;
+          ctx.beginPath();
+          ctx.roundRect(-22, -16, 44, 32, 12);
+          ctx.fill();
+
+          // Avatar Icon
+          ctx.font = '26px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(av.icon, 0, -2);
+
+          // Leader Crown
+          if (t.id === leaderId && t.progress > 1) {
+            ctx.font = '18px sans-serif';
+            ctx.fillText('👑', 0, -25);
+          }
+
+          // Edits Stamp Overlay
+          if (t.slowUntil > now) {
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText('📎 ПРАВКИ!', 0, 24);
+          }
+
+          ctx.restore();
+
+          // Speech Bubble
+          const bub = this.bubbles.find((b) => b.tableId === t.id);
+          if (bub) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.roundRect(x - 55, y - 48, 110, 20, 8);
+            ctx.fill();
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(bub.text, x, y - 35);
+          }
+        });
+
+        // 6. Flying Sabotage Projectiles
+        this.projectiles.forEach((pr) => {
+          const t1 = this.tables[pr.fromIdx];
+          const t2 = this.tables[pr.toIdx];
+          if (!t1 || !t2) return;
+          const x1 = startX + (t1.progress / 100) * trackSpan;
+          const y1 = trackTop + pr.fromIdx * laneH + laneH * 0.5;
+          const x2 = startX + (t2.progress / 100) * trackSpan;
+          const y2 = trackTop + pr.toIdx * laneH + laneH * 0.5;
+
+          const cx = x1 + (x2 - x1) * pr.progress;
+          const cy = y1 + (y2 - y1) * pr.progress - Math.sin(pr.progress * Math.PI) * 65;
+          ctx.font = '28px sans-serif';
+          ctx.fillText(pr.icon, cx, cy);
+        });
+
+        // 7. Giant Watchful Boss Eye Overlay
+        if (this.activeGlobalEvent?.type === 'boss') {
+          ctx.fillStyle = 'rgba(220, 38, 38, 0.22)';
+          ctx.fillRect(0, 0, W, H);
+          ctx.font = '64px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('👁️', W / 2, H / 2);
+        }
+
+        ctx.restore();
+      },
+
+      finishRace() {
+        this.phase = 'podium';
+        SFX.stopMusic();
+        if (this.botInterval) clearInterval(this.botInterval);
+        if (this.specialsTimer) clearInterval(this.specialsTimer);
+
+        const ranked = [...this.tables].sort((a, b) => {
+          if (a.finishTime && b.finishTime) return Number(a.finishTime) - Number(b.finishTime);
+          return b.progress - a.progress;
+        });
+
+        // Award tournament points
+        const pts = [3, 2, 1];
+        ranked.slice(0, 3).forEach((t, idx) => {
+          t.tournamentPoints += pts[idx];
+        });
+
+        const placesEl = document.getElementById('podium-places');
+        placesEl.innerHTML = '';
+        const order = [1, 0, 2]; // Silver, Gold, Bronze visual podium
+        order.forEach((rankIdx) => {
+          const t = ranked[rankIdx];
+          if (!t) return;
+          const av = AVATARS.find((a) => a.id === t.avatarId) || AVATARS[0];
+          const medal = rankIdx === 0 ? '🥇 1 МЕСТО' : (rankIdx === 1 ? '🥈 2 МЕСТО' : '🥉 3 МЕСТО');
+          const box = document.createElement('div');
+          box.className = `place-box ${rankIdx === 0 ? 'place-1' : ''}`;
+          box.innerHTML = `
+            <div style="font-weight:900; color:var(--accent);">${medal}</div>
+            <div style="font-size:2.4rem; margin:6px 0;">${av.icon}</div>
+            <div style="font-weight:900; font-size:1.1rem;">${t.name}</div>
+            <div style="font-size:0.82rem; color:var(--muted); margin-top:4px;">
+              ${t.finishTime ? `Время: ${t.finishTime}с` : `Дистанция: ${Math.round(t.progress)}%`}
+              ${this.gameMode === 'tournament' ? ` • Очки: ${t.tournamentPoints}` : ''}
+            </div>
+          `;
+          placesEl.appendChild(box);
+        });
+
+        // Find MVP (highest honest taps across entire hall)
+        const allPlayers = Object.values(this.players);
+        allPlayers.sort((a, b) => b.validTaps - a.validTaps);
+        const mvp = allPlayers[0];
+        if (mvp && mvp.validTaps > 0) {
+          const mvpTable = this.tables.find((x) => x.id === mvp.tableId);
+          document.getElementById('mvp-display').textContent =
+            `${mvp.name} (${mvpTable ? mvpTable.name : ''}) — ${mvp.validTaps} честных нажатий!`;
+        } else {
+          document.getElementById('mvp-display').textContent = 'Дружба и корпоративный дух!';
+        }
+
+        document.getElementById('podium-title').textContent =
+          this.gameMode === 'tournament' ? `🏆 ИТОГИ РАУНДА ${this.roundNum} / 3` : '🏆 ПЬЕДЕСТАЛ ПОЧЁТА';
+
+        document.getElementById('podium-overlay').classList.remove('hidden');
+        this.broadcastState();
+      },
+
+      nextRoundOrRematch() {
+        this.roundNum++;
+        document.getElementById('round-pill').textContent = `🏆 Заезд ${this.roundNum}`;
+        this.startRace();
+      },
+
+      returnToLobby() {
+        this.phase = 'lobby';
+        SFX.stopMusic();
+        if (this.botInterval) clearInterval(this.botInterval);
+        if (this.specialsTimer) clearInterval(this.specialsTimer);
+
+        document.getElementById('race-screen').classList.add('hidden');
+        document.getElementById('podium-overlay').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        document.getElementById('btn-start-race').classList.remove('hidden');
+        document.getElementById('btn-abort-race').classList.add('hidden');
+        this.renderLobby();
+        this.broadcastState();
+      }
+    };
+
+    /* ==========================================================================
+       5. MOBILE GUEST CONTROLLER (TAP + BURNOUT + COMBO + SHAKE SENSOR)
+       ========================================================================== */
+    class PlayerController {
+      constructor(mountEl, roomCode, isSimulator = false) {
+        this.mountEl = mountEl;
+        this.roomCode = roomCode;
+        this.isSimulator = isSimulator;
+
+        const tpl = document.getElementById('player-template');
+        this.mountEl.innerHTML = '';
+        this.mountEl.appendChild(tpl.content.cloneNode(true));
+        this.root = this.mountEl.querySelector('#player-app');
+
+        // Restore saved session if guest refreshed browser
+        const saved = JSON.parse(sessionStorage.getItem(`gs_session_${roomCode}`) || 'null');
+        this.playerId = saved?.playerId || `p_${uid(7)}`;
+        this.tableId = saved?.tableId || 1;
+        this.playerName = saved?.playerName || '';
+        this.avatarId = saved?.avatarId || AVATARS[0].id;
+        this.totalTaps = saved?.totalTaps || 0;
+        this.joined = Boolean(saved?.joined);
+
+        this.tables = Array.from({ length: 6 }, (_, i) => ({
+          id: i + 1,
+          name: `Стол №${i + 1}`,
+          avatarId: AVATARS[i % AVATARS.length].id,
+          nitroActive: false
+        }));
+
+        this.phase = 'lobby';
+        this.globalEvent = null;
+        this.pendingBatch = 0;
+        this.heat = 0; // 0..100
+        this.overheatedUntil = 0;
+        this.comboMult = 1.0;
+        this.lastTapTime = 0;
+        this.activeSabotage = null;
+
+        // Shake sensor state
+        this.shakeEnabled = false;
+        this.shakeThreshold = 14;
+        this.lastAccel = null;
+        this.lastShakeTap = 0;
+        this.sensorPackets = 0;
+
+        this.bindElements();
+        this.connectBus();
+        this.startLoops();
+
+        if (this.joined) {
+          this.showCockpit();
+          this.sendJoin();
+        }
+      }
+
+      q(bind) {
+        return this.root.querySelector(`[data-bind="${bind}"]`);
+      }
+
+      bindElements() {
+        // Render avatar choices
+        const avBox = this.q('avatar-picker');
+        avBox.innerHTML = AVATARS.map((a) => `
+          <button type="button" class="p-table-btn ${this.avatarId === a.id ? 'selected' : ''}" data-av="${a.id}" style="text-align:center; padding:8px;">
+            <div style="font-size:1.35rem;">${a.icon}</div>
+            <div style="font-size:0.7rem;">${a.name.split(' ')[0]}</div>
+          </button>
+        `).join('');
+
+        avBox.querySelectorAll('[data-av]').forEach((btn) => {
+          btn.onclick = () => {
+            this.avatarId = btn.dataset.av;
+            avBox.querySelectorAll('[data-av]').forEach((b) => b.classList.toggle('selected', b.dataset.av === this.avatarId));
+          };
+        });
+
+        this.q('player-name').value = this.playerName;
+        this.q('random-name').onclick = () => {
+          const rnd = FUNNY_NAMES[Math.floor(Math.random() * FUNNY_NAMES.length)];
+          this.q('player-name').value = rnd;
+        };
+
+        this.q('join-btn').onclick = () => {
+          SFX.unlock();
+          this.playerName = this.q('player-name').value.trim() || FUNNY_NAMES[Math.floor(Math.random() * FUNNY_NAMES.length)];
+          this.joined = true;
+          this.saveSession();
+          this.showCockpit();
+          this.sendJoin();
+        };
+
+        // Main GAS button (pointerdown prevents 300ms mobile delay & double-tap zoom)
+        const gasBtn = this.q('gas-btn');
+        gasBtn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          gasBtn.classList.add('pressed');
+          this.registerImpulse();
+        });
+        gasBtn.addEventListener('pointerup', () => gasBtn.classList.remove('pressed'));
+        gasBtn.addEventListener('pointerleave', () => gasBtn.classList.remove('pressed'));
+
+        // Shake mode controls
+        this.q('shake-sens').onchange = (e) => {
+          this.shakeThreshold = Number(e.target.value);
+        };
+
+        this.q('shake-toggle').onchange = async (e) => {
+          const wantOn = e.target.checked;
+          if (!wantOn) {
+            this.shakeEnabled = false;
+            this.q('shake-status').textContent = 'Режим тряски выключен';
+            return;
+          }
+
+          if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            try {
+              const res = await DeviceMotionEvent.requestPermission();
+              if (res !== 'granted') {
+                e.target.checked = false;
+                this.q('shake-status').textContent = '🚫 Доступ к датчику движения отклонён в Safari';
+                return;
+              }
+            } catch (err) {
+              e.target.checked = false;
+              this.q('shake-status').textContent = '⚠️ Разрешите доступ к движению в настройках браузера';
+              return;
+            }
+          }
+
+          this.enableShakeListener();
+        };
+
+        this.renderTableSelector();
+      }
+
+      enableShakeListener() {
+        this.shakeEnabled = true;
+        this.sensorPackets = 0;
+        if (!window.isSecureContext && !this.isSimulator) {
+          this.q('shake-status').textContent = '⚠️ Нужен HTTPS: браузер блокирует акселерометр по HTTP';
+        } else {
+          this.q('shake-status').textContent = '🟡 Проверка акселерометра... Потрясите телефон!';
+        }
+
+        if (!this._motionBound) {
+          this._motionBound = true;
+          window.addEventListener('devicemotion', (ev) => this.handleDeviceMotion(ev));
+        }
+
+        setTimeout(() => {
+          if (this.shakeEnabled && this.sensorPackets === 0 && !this.isSimulator) {
+            this.q('shake-status').textContent = '⚠️ Нет сигнала датчика — жмите большую кнопку ГАЗ!';
+          }
+        }, 1800);
+      }
+
+      handleDeviceMotion(ev) {
+        if (!this.shakeEnabled) return;
+        const acc = ev.accelerationIncludingGravity || ev.acceleration;
+        if (!acc || (acc.x === null && acc.y === null && acc.z === null)) return;
+
+        this.sensorPackets++;
+        if (this.sensorPackets === 1) {
+          this.q('shake-status').textContent = '🟢 Датчик активен! Трясите смартфон!';
+        }
+
+        const x = acc.x || 0;
+        const y = acc.y || 0;
+        const z = acc.z || 0;
+
+        if (this.lastAccel) {
+          const delta = Math.abs(x - this.lastAccel.x) + Math.abs(y - this.lastAccel.y) + Math.abs(z - this.lastAccel.z);
+          const pct = Math.min(100, Math.round((delta / (this.shakeThreshold * 1.6)) * 100));
+          this.q('seismo-fill').style.width = `${pct}%`;
+
+          const now = Date.now();
+          if (delta >= this.shakeThreshold && now - this.lastShakeTap > 90) {
+            this.lastShakeTap = now;
+            navigator.vibrate?.(20);
+            this.registerImpulse();
+          }
+        }
+        this.lastAccel = { x, y, z };
+      }
+
+      simulateShakePulse() {
+        this.q('shake-toggle').checked = true;
+        this.shakeEnabled = true;
+        this.q('shake-status').textContent = '🟢 Тестовый импульс тряски!';
+        this.q('seismo-fill').style.width = '92%';
+        setTimeout(() => { this.q('seismo-fill').style.width = '10%'; }, 220);
+        this.registerImpulse();
+      }
+
+      renderTableSelector() {
+        const box = this.q('table-list');
+        box.innerHTML = this.tables.map((t) => {
+          const av = AVATARS.find((a) => a.id === t.avatarId) || AVATARS[0];
+          return `
+            <button type="button" class="p-table-btn ${this.tableId === t.id ? 'selected' : ''}" data-tid="${t.id}">
+              ${av.icon} ${t.name}
+            </button>
+          `;
+        }).join('');
+
+        box.querySelectorAll('[data-tid]').forEach((btn) => {
+          btn.onclick = () => {
+            this.tableId = Number(btn.dataset.tid);
+            this.renderTableSelector();
+          };
+        });
+      }
+
+      connectBus() {
+        this.bus = new RealtimeBus(
+          this.roomCode,
+          'player',
+          (msg) => this.onMessage(msg),
+          (_cls, text) => {
+            this.q('conn-status').textContent = text;
+          }
+        );
+        setTimeout(() => this.bus.send('hello', { playerId: this.playerId }), 400);
+      }
+
+      sendJoin() {
+        this.bus.send('join', {
+          playerId: this.playerId,
+          tableId: this.tableId,
+          name: this.playerName,
+          avatarId: this.avatarId,
+          totalTaps: this.totalTaps
+        });
+      }
+
+      saveSession() {
+        if (this.isSimulator) return;
+        sessionStorage.setItem(`gs_session_${this.roomCode}`, JSON.stringify({
+          playerId: this.playerId,
+          tableId: this.tableId,
+          playerName: this.playerName,
+          avatarId: this.avatarId,
+          totalTaps: this.totalTaps,
+          joined: this.joined
+        }));
+      }
+
+      showCockpit() {
+        this.root.querySelector('[data-view="setup"]').classList.add('hidden');
+        this.root.querySelector('[data-view="cockpit"]').classList.remove('hidden');
+        const t = this.tables.find((x) => x.id === this.tableId);
+        this.q('my-table-title').textContent = t ? t.name : `Стол №${this.tableId}`;
+        this.q('my-name-badge').textContent = this.playerName;
+      }
+
+      registerImpulse() {
+        const now = Date.now();
+        if (now < this.overheatedUntil) return;
+
+        // If Boss is watching, tapping triggers immediate penalty!
+        if (this.globalEvent === 'boss') {
+          navigator.vibrate?.([120, 60, 120]);
+          this.pendingBatch += 1;
+          return;
+        }
+
+        if (this.phase !== 'racing') {
+          // Warmup tap feedback in lobby
+          this.totalTaps++;
+          this.q('my-taps').textContent = `${this.totalTaps} (разминка)`;
+          SFX.tone(360 + (this.totalTaps % 8) * 30, 0.05, 'triangle', 0.08);
+          return;
+        }
+
+        // Anti-spam & Combo calculation
+        const gap = now - this.lastTapTime;
+        if (gap < 72) return; // max ~13.8/sec locally
+        this.lastTapTime = now;
+
+        this.totalTaps++;
+        this.pendingBatch++;
+
+        // Build heat & combo
+        this.heat = Math.min(100, this.heat + 6.8);
+        if (this.heat >= 100) {
+          this.overheatedUntil = now + 1500;
+          this.comboMult = 1.0;
+          navigator.vibrate?.([150, 50, 150]);
+          SFX.tone(150, 0.3, 'sawtooth', 0.16, 80);
+          return;
+        }
+
+        if (gap < 220) {
+          this.comboMult = Math.min(2.0, Math.round((this.comboMult + 0.04) * 100) / 100);
+        } else {
+          this.comboMult = Math.max(1.0, Math.round((this.comboMult - 0.08) * 100) / 100);
+        }
+
+        SFX.tone(280 + this.comboMult * 140, 0.04, 'triangle', 0.07);
+      }
+
+      onMessage(msg) {
+        if (msg.type === 'state') {
+          const prevPhase = this.phase;
+          this.phase = msg.phase;
+          if (msg.tables) {
+            this.tables = msg.tables;
+            if (!this.joined) this.renderTableSelector();
+            const myT = this.tables.find((x) => x.id === this.tableId);
+            if (myT) {
+              this.q('my-table-title').textContent = `${myT.name} (${myT.progress}%)`;
+              this.myTableNitro = myT.nitroActive;
+            }
+          }
+
+          if (prevPhase !== 'racing' && this.phase === 'racing') {
+            this.totalTaps = 0;
+            this.heat = 0;
+            this.comboMult = 1.0;
+            this.saveSession();
+          }
+
+          if (msg.globalEvent === 'boss' && this.globalEvent !== 'boss') {
+            navigator.vibrate?.([250, 80, 250]);
+          }
+          this.globalEvent = msg.globalEvent;
+          this.renderActionSlot();
+        }
+
+        if (msg.type === 'give_sabotage' && msg.targetPlayerId === this.playerId) {
+          this.activeSabotage = msg.card;
+          navigator.vibrate?.(120);
+          this.renderActionSlot();
+        }
+      }
+
+      renderActionSlot() {
+        const slot = this.q('action-slot');
+
+        if (this.myTableNitro) {
+          slot.innerHTML = `<button type="button" class="nitro-btn" id="btn-fire-nitro">⚡ ЖМИ НИТРО СЕЙЧАС! ⚡</button>`;
+          slot.querySelector('#btn-fire-nitro').onclick = () => {
+            this.myTableNitro = false;
+            this.bus.send('nitro_press', { tableId: this.tableId, playerId: this.playerId });
+            navigator.vibrate?.(180);
+            this.renderActionSlot();
+          };
+          return;
+        }
+
+        if (this.activeSabotage) {
+          const others = this.tables.filter((t) => t.id !== this.tableId);
+          slot.innerHTML = `
+            <div class="sabotage-card">
+              <div style="font-size:0.78rem; font-weight:900;">${this.activeSabotage.icon} ДИВЕРСИЯ: ${this.activeSabotage.title}! Кого подставим?</div>
+              <div class="sabotage-targets">
+                ${others.map((o) => `<button type="button" class="sab-target-btn" data-target="${o.id}">🎯 ${o.name}</button>`).join('')}
+              </div>
+            </div>
+          `;
+          slot.querySelectorAll('[data-target]').forEach((btn) => {
+            btn.onclick = () => {
+              const targetId = Number(btn.dataset.target);
+              this.bus.send('sabotage', {
+                fromTableId: this.tableId,
+                targetTableId: targetId,
+                sabotageId: this.activeSabotage.id
+              });
+              this.activeSabotage = null;
+              this.renderActionSlot();
+            };
+          });
+          return;
+        }
+
+        slot.innerHTML = `<div style="text-align:center; font-size:0.8rem; color:var(--muted); padding:16px 0;">
+          ${this.phase === 'racing' ? 'Держи ритм без перегрева — копи x2.0 БЕРСЕРК!' : 'Ожидаем команду ведущего на старт...'}
+        </div>`;
+      }
+
+      startLoops() {
+        // Cool down heat & update button visuals at 20fps
+        setInterval(() => {
+          const now = Date.now();
+          this.heat = Math.max(0, this.heat - 2.4);
+
+          this.q('heat-fill').style.width = `${Math.round(this.heat)}%`;
+          this.q('heat-pct').textContent = `${Math.round(this.heat)}%`;
+          this.q('my-taps').textContent = `${this.totalTaps} тапов`;
+          this.q('my-combo').textContent = this.comboMult >= 1.8 ? `🔥 БЕРСЕРК x${this.comboMult.toFixed(1)}` : `Комбо x${this.comboMult.toFixed(1)}`;
+
+          const btn = this.q('gas-btn');
+          btn.classList.remove('berserk', 'overheated', 'boss-stop');
+          this.root.classList.toggle('boss-alert', this.globalEvent === 'boss');
+
+          if (this.globalEvent === 'boss') {
+            btn.classList.add('boss-stop');
+            this.q('gas-icon').textContent = '👁️';
+            this.q('gas-text').textContent = 'СТОП! БОСС ИДЁТ!';
+            this.q('gas-sub').textContent = 'НЕ НАЖИМАЙ! ИНАЧЕ ШТРАФ!';
+          } else if (now < this.overheatedUntil) {
+            btn.classList.add('overheated');
+            this.q('gas-icon').textContent = '🚬';
+            this.q('gas-text').textContent = 'ПЕРЕКУР (ПЕРЕГРЕВ)';
+            this.q('gas-sub').textContent = 'Остываем 1.5 сек...';
+          } else if (this.comboMult >= 1.8) {
+            btn.classList.add('berserk');
+            this.q('gas-icon').textContent = '⚡';
+            this.q('gas-text').textContent = 'БЕРСЕРК x2.0!';
+            this.q('gas-sub').textContent = 'Максимальная тяга!';
+          } else {
+            this.q('gas-icon').textContent = '🔥';
+            this.q('gas-text').textContent = 'ГАЗ! РАБОТАТЬ!';
+            this.q('gas-sub').textContent = 'Тапай или тряси телефон';
+          }
+        }, 50);
+
+        // Batch-send taps every 180ms so 100+ phones never flood the broker
+        setInterval(() => {
+          if (!this.joined || this.pendingBatch <= 0) return;
+          const batch = this.pendingBatch;
+          this.pendingBatch = 0;
+          this.saveSession();
+          this.bus.send('tap_batch', {
+            playerId: this.playerId,
+            delta: batch,
+            totalTaps: this.totalTaps,
+            comboMult: this.comboMult,
+            isOverheated: Date.now() < this.overheatedUntil
+          });
+        }, 180);
+      }
+    }
+
+    /* ==========================================================================
+       6. ENTRYPOINT ROUTING (PROJECTOR vs MOBILE PHONE)
+       ========================================================================== */
+    (function bootstrap() {
+      const params = new URLSearchParams(window.location.search);
+      const role = params.get('role');
+      const room = params.get('room');
+
+      if (role === 'player' && room) {
+        document.getElementById('host-app').classList.add('hidden');
+        const mount = document.createElement('div');
+        mount.style.width = '100vw';
+        mount.style.height = '100vh';
+        document.body.appendChild(mount);
+        new PlayerController(mount, room.toUpperCase(), false);
+      } else {
+        HostApp.init();
+      }
+    })();
+  </script>
+</body>
+</html>
